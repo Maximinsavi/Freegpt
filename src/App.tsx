@@ -123,7 +123,9 @@ export default function App() {
     }
   }, [input]);
 
-  // Speech Recognition (Vocal Dictation)
+  // Speech Recognition (Vocal Dictation - Sent directly to Chat)
+  const handleSendMessageRef = useRef<any>(null);
+
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -134,18 +136,23 @@ export default function App() {
 
       rec.onstart = () => {
         setIsListening(true);
+        showToast("Enregistrement en cours... Parlez maintenant.");
       };
 
       rec.onresult = (event: any) => {
         const transcript = event.results[0][0].transcript;
-        if (transcript) {
-          setInput((prev) => (prev ? prev + '\n' + transcript : transcript));
+        if (transcript && transcript.trim()) {
+          showToast("Message vocal capturé ! Envoi...");
+          if (handleSendMessageRef.current) {
+            handleSendMessageRef.current(transcript.trim());
+          }
         }
       };
 
       rec.onerror = (event: any) => {
         console.error('Speech recognition error', event.error);
         setIsListening(false);
+        showToast("Erreur d'écoute ou micro non disponible.");
       };
 
       rec.onend = () => {
@@ -583,6 +590,11 @@ export default function App() {
           }),
         });
 
+        if (!res.ok) {
+          const errText = await res.text().catch(() => "Erreur inconnue");
+          throw new Error(`Erreur du serveur (Statut ${res.status}): ${errText || res.statusText}`);
+        }
+
         if (!res.body) {
           throw new Error("Impossible d'initialiser le flux de réponse.");
         }
@@ -590,17 +602,56 @@ export default function App() {
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let streamAccumulator = '';
+        let buffer = '';
 
         while (true) {
           const { done, value } = await reader.read();
-          if (done) break;
+          if (done) {
+            const trimmedLine = buffer.trim();
+            if (trimmedLine.startsWith('data: ')) {
+              const dataValue = trimmedLine.substring(6).trim();
+              if (dataValue && dataValue !== '[DONE]') {
+                try {
+                  const parsed = JSON.parse(dataValue);
+                  if (parsed.text) {
+                    streamAccumulator += parsed.text;
+                    setConversations((prev) =>
+                      prev.map((c) => {
+                        if (c.id === activeConv.id) {
+                          return {
+                            ...c,
+                            messages: c.messages.map((m) =>
+                              m.id === botMsgId
+                                ? {
+                                    ...m,
+                                    content: streamAccumulator,
+                                    isGenerating: false,
+                                  }
+                                : m
+                            ),
+                          };
+                        }
+                        return c;
+                      })
+                    );
+                  }
+                } catch (e) {}
+              }
+            }
+            break;
+          }
 
-          const chunkStr = decoder.decode(value);
-          const lines = chunkStr.split('\n');
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          // Keep the last item in buffer since it might be an incomplete line
+          buffer = lines.pop() || '';
 
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const dataValue = line.substring(6).trim();
+            const trimmedLine = line.trim();
+            if (!trimmedLine) continue;
+
+            if (trimmedLine.startsWith('data: ')) {
+              const dataValue = trimmedLine.substring(6).trim();
               if (dataValue === '[DONE]') {
                 break;
               }
@@ -631,7 +682,7 @@ export default function App() {
                   throw new Error(parsed.error);
                 }
               } catch (e) {
-                // Ignore parsing warnings for sliced JSON
+                // Ignore incomplete line parse failure
               }
             }
           }
@@ -663,6 +714,8 @@ export default function App() {
       }
     }
   };
+
+  handleSendMessageRef.current = handleSendMessage;
 
   const activePersona = PERSONAS.find((p) => p.id === activeConv?.personaId) || PERSONAS[0];
 
@@ -965,20 +1018,8 @@ export default function App() {
               <motion.div
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="space-y-8 py-8"
+                className="space-y-6 py-4"
               >
-                {/* Branding Hero Banner */}
-                <div className="text-center space-y-3">
-                  <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 shadow-xl shadow-emerald-950/10">
-                    <Sparkles className="h-7 w-7 text-emerald-400 animate-pulse-slow" />
-                  </div>
-                  <h1 className="font-display text-3xl md:text-4xl font-extrabold tracking-tight text-white">
-                    Bienvenue sur <span className="text-emerald-400">FreeGPT</span>
-                  </h1>
-                  <p className="text-gray-400 text-sm md:text-base max-w-lg mx-auto">
-                    Générez des réponses textuelles précises en temps réel ou créez des photos et illustrations magnifiques sans limite.
-                  </p>
-                </div>
 
                 {/* Persona selector cards */}
                 <div className="space-y-3">
@@ -1095,7 +1136,7 @@ export default function App() {
                       key={msg.id}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className={`flex gap-4 ${isUser ? 'justify-end' : 'justify-start'}`}
+                      className={`flex gap-4 ${isUser ? 'justify-end' : 'justify-start'} w-full max-w-full overflow-hidden`}
                     >
                       {/* Avatar icon */}
                       {!isUser && (
@@ -1106,7 +1147,7 @@ export default function App() {
 
                       {/* Content Frame */}
                       <div
-                        className={`flex flex-col max-w-[85%] rounded-2xl p-4.5 shadow-sm border ${
+                        className={`flex flex-col max-w-[85%] md:max-w-[78%] rounded-2xl p-4.5 shadow-sm border min-w-0 break-words overflow-hidden ${
                           isUser
                             ? 'bg-emerald-500/10 border-emerald-500/25 text-white rounded-tr-none'
                             : 'bg-gray-950/45 border-gray-850/80 text-gray-200 rounded-tl-none'
