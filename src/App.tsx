@@ -91,6 +91,7 @@ export default function App() {
   const [aspectRatio, setAspectRatio] = useState<'1:1' | '16:9' | '9:16' | '4:3' | '3:4'>('1:1');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
   
@@ -943,6 +944,116 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Info / About Modal */}
+      <AnimatePresence>
+        {isInfoOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col max-h-[85vh]"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 p-5 shrink-0 bg-slate-50">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-emerald-600" />
+                  <h3 className="font-display text-base sm:text-lg font-bold text-slate-950">À propos de FreeGPT</h3>
+                </div>
+                <button
+                  onClick={() => setIsInfoOpen(false)}
+                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-800 transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="space-y-5 p-6 overflow-y-auto">
+                <div className="text-center pb-4 border-b border-slate-100">
+                  <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-600 font-bold mb-2.5 shadow-xs">
+                    🤖
+                  </div>
+                  <h4 className="text-lg font-black text-slate-900">FreeGPT v1.2</h4>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Développé avec passion par <span className="font-bold text-emerald-600">Maximin Savi</span>
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Fonctionnalités Clés</h5>
+                  
+                  <div className="space-y-3.5">
+                    <div className="flex gap-3">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 text-xs">
+                        💬
+                      </div>
+                      <div>
+                        <h6 className="text-xs sm:text-sm font-bold text-slate-800">Assistant IA Multitâche</h6>
+                        <p className="text-xs text-slate-500 leading-relaxed mt-0.5">
+                          Génération de réponses ultra-rapides et intelligentes propulsées par <span className="font-semibold text-slate-700">Gemini 3.5 Flash</span>. Adaptez le ton de l'assistant grâce aux 4 personas spécialisés.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 text-xs">
+                        🎨
+                      </div>
+                      <div>
+                        <h6 className="text-xs sm:text-sm font-bold text-slate-800">Créateur d'Images IA d'Art</h6>
+                        <p className="text-xs text-slate-500 leading-relaxed mt-0.5">
+                          Entrez n'importe quelle idée et l'IA traduira et enrichira automatiquement votre prompt en anglais pour générer des œuvres d'art visuel haute définition dans plusieurs formats d'image.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-pink-50 text-pink-600 text-xs">
+                        🎙️
+                      </div>
+                      <div>
+                        <h6 className="text-xs sm:text-sm font-bold text-slate-800">Messages Vocaux Réels</h6>
+                        <p className="text-xs text-slate-500 leading-relaxed mt-0.5">
+                          Dictez vos messages ! L'application enregistre votre véritable voix en arrière-plan, intègre un lecteur audio interactif et génère en parallèle une transcription textuelle complète.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600 text-xs">
+                        ⚙️
+                      </div>
+                      <div>
+                        <h6 className="text-xs sm:text-sm font-bold text-slate-800">Personnalisation Totale</h6>
+                        <p className="text-xs text-slate-500 leading-relaxed mt-0.5">
+                          Ajustez la température (créativité) ou rédigez des instructions système pour façonner les réponses de l'IA selon vos besoins exacts.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-xs text-slate-500 space-y-1">
+                  <div className="font-bold text-slate-700 mb-1">Fiche Technique :</div>
+                  <div>• <span className="font-semibold text-slate-600">Frontend :</span> React 18, Tailwind CSS, Motion</div>
+                  <div>• <span className="font-semibold text-slate-600">Backend :</span> Node.js, Express, Google GenAI SDK</div>
+                  <div>• <span className="font-semibold text-slate-600">Stockage :</span> Persistance locale sécurisée (localStorage)</div>
+                  <div>• <span className="font-semibold text-slate-600">Auteur :</span> Maximin Savi</div>
+                </div>
+              </div>
+
+              <div className="p-4 border-t border-slate-100 bg-slate-50 text-center shrink-0">
+                <button
+                  onClick={() => setIsInfoOpen(false)}
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm transition-colors cursor-pointer shadow-sm shadow-emerald-600/10"
+                >
+                  Fermer
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Mobile Sidebar Backdrop Overlay */}
       {isSidebarOpen && (
         <div
@@ -1036,21 +1147,30 @@ export default function App() {
         {/* Sidebar Footer */}
         <div className="p-4 border-t border-slate-150 bg-slate-50 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-lg bg-slate-200 flex items-center justify-center text-xs font-mono font-bold text-slate-600 select-none border border-slate-300">
-              v1
+            <div className="h-7 w-7 rounded-lg bg-emerald-500/10 flex items-center justify-center text-xs font-mono font-bold text-emerald-600 select-none border border-emerald-500/20">
+              v1.2
             </div>
             <div className="text-xs">
-              <div className="font-bold text-slate-800">ChatGPT Free</div>
-              <div className="text-[10px] text-slate-500">Crédits Illimités</div>
+              <div className="font-bold text-slate-800">FreeGPT</div>
+              <div className="text-[10px] text-slate-500 font-medium">Par Maximin Savi</div>
             </div>
           </div>
-          <button
-            onClick={() => setIsSettingsOpen(true)}
-            className="rounded-lg p-2 text-slate-400 hover:bg-slate-200 hover:text-emerald-600 transition-colors cursor-pointer"
-            title="Paramètres de l'IA"
-          >
-            <Settings className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={() => setIsInfoOpen(true)}
+              className="rounded-lg p-2 text-slate-400 hover:bg-slate-200 hover:text-emerald-600 transition-colors cursor-pointer"
+              title="À propos du site (Par Maximin Savi)"
+            >
+              <Info className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="rounded-lg p-2 text-slate-400 hover:bg-slate-200 hover:text-emerald-600 transition-colors cursor-pointer"
+              title="Paramètres de l'IA"
+            >
+              <Settings className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
 
