@@ -80,7 +80,7 @@ function CodeRenderer({ language, code }: CodeRendererProps) {
   };
 
   return (
-    <div className="my-3 overflow-hidden rounded-xl border border-gray-800 bg-gray-950 font-mono text-sm shadow-lg">
+    <div className="my-3 overflow-hidden rounded-xl border border-gray-800 bg-gray-950 font-mono text-xs sm:text-sm shadow-lg w-full max-w-full">
       <div className="flex items-center justify-between border-b border-gray-900 bg-gray-900/80 px-4 py-2 text-xs text-gray-400 select-none">
         <div className="flex items-center gap-2">
           <Terminal className="h-3.5 w-3.5 text-emerald-400" />
@@ -88,25 +88,25 @@ function CodeRenderer({ language, code }: CodeRendererProps) {
         </div>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white"
+          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white cursor-pointer"
           title="Copier le code"
         >
           {copied ? (
             <>
               <Check className="h-3.5 w-3.5 text-emerald-400" />
-              <span className="text-emerald-400 font-medium">Copié !</span>
+              <span className="text-emerald-400 font-medium font-sans">Copié !</span>
             </>
           ) : (
             <>
               <Copy className="h-3.5 w-3.5" />
-              <span>Copier</span>
+              <span className="font-sans">Copier</span>
             </>
           )}
         </button>
       </div>
-      <div className="overflow-x-auto p-4">
-        <pre className="text-gray-100 selection:bg-emerald-500/30">
-          <code>{code}</code>
+      <div className="overflow-x-auto p-3 sm:p-4 w-full max-w-full [webkit-overflow-scrolling:touch]">
+        <pre className="text-gray-100 selection:bg-emerald-500/30 whitespace-pre overflow-x-auto max-w-full">
+          <code className="block max-w-full">{code}</code>
         </pre>
       </div>
     </div>

@@ -246,6 +246,16 @@ export default function App() {
     }
   };
 
+  // Copy assistant response text to clipboard
+  const handleCopyResponseText = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("Réponse copiée dans le presse-papiers !");
+    } catch (err) {
+      showToast("Impossible de copier la réponse.");
+    }
+  };
+
   // Show customized floating notifications
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -948,7 +958,7 @@ export default function App() {
             {/* Current Persona Status Display */}
             <div className="flex items-center gap-2">
               <span className="text-lg">{activePersona.emoji}</span>
-              <div>
+              <div className="hidden sm:block">
                 <h2 className="font-display text-[14.5px] font-bold text-white tracking-wide whitespace-nowrap">
                   {activePersona.name}
                 </h2>
@@ -956,30 +966,30 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             {/* Mode selection buttons */}
-            <div className="flex items-center gap-1 bg-gray-950/80 p-1.5 rounded-xl border border-gray-850/80">
+            <div className="flex items-center gap-1 bg-gray-950/80 p-1 rounded-xl border border-gray-850/80">
               <button
                 onClick={() => setMode('text')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
                   mode === 'text'
                     ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
                     : 'text-gray-400 hover:text-gray-200'
                 }`}
               >
                 <Bot className="h-3.5 w-3.5" />
-                <span>Texte</span>
+                <span className="hidden xs:inline">Texte</span>
               </button>
               <button
                 onClick={() => setMode('image')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
                   mode === 'image'
                     ? 'bg-indigo-500/10 border border-indigo-500/20 text-indigo-400'
                     : 'text-gray-400 hover:text-gray-200'
                 }`}
               >
                 <Palette className="h-3.5 w-3.5" />
-                <span>Image</span>
+                <span className="hidden xs:inline">Image</span>
               </button>
             </div>
 
@@ -987,11 +997,11 @@ export default function App() {
             {activeConv && activeConv.messages.length > 0 && (
               <button
                 onClick={handleExportChat}
-                className="flex items-center gap-1.5 rounded-xl border border-gray-800 bg-gray-950/50 hover:bg-gray-900 hover:text-white px-3 py-2 text-xs font-semibold text-gray-300 transition-all cursor-pointer"
+                className="hidden sm:flex items-center gap-1.5 rounded-xl border border-gray-800 bg-gray-950/50 hover:bg-gray-900 hover:text-white px-3 py-2 text-xs font-semibold text-gray-300 transition-all cursor-pointer"
                 title="Exporter l'historique en Markdown"
               >
                 <Download className="h-3.5 w-3.5" />
-                <span className="max-sm:hidden">Exporter</span>
+                <span>Exporter</span>
               </button>
             )}
 
@@ -1218,12 +1228,12 @@ export default function App() {
                           </div>
                         )}
 
-                        {/* Bottom action utilities (Read Aloud, Re-generate, etc.) */}
+                         {/* Bottom action utilities (Read Aloud, Re-generate, etc.) */}
                         {!isUser && !msg.isGenerating && (
-                          <div className="mt-4 flex items-center gap-2 border-t border-gray-900/40 pt-2 text-xs select-none">
+                          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-900/40 pt-2 text-xs select-none">
                             <button
                               onClick={() => handleReadAloud(msg.content, msg.id)}
-                              className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] font-semibold transition-all ${
+                              className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer ${
                                 speakingMessageId === msg.id
                                   ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 animate-pulse'
                                   : 'border-gray-850 bg-gray-950/30 text-gray-400 hover:text-white hover:bg-gray-900'
@@ -1238,10 +1248,21 @@ export default function App() {
                               ) : (
                                 <>
                                   <Volume2 className="h-3 w-3" />
-                                  <span>Lecture Vocale</span>
+                                  <span>Lecture</span>
                                 </>
                               )}
                             </button>
+
+                            {msg.content && (
+                              <button
+                                onClick={() => handleCopyResponseText(msg.content)}
+                                className="flex items-center gap-1 px-2 py-1 rounded-lg border border-gray-850 bg-gray-950/30 text-gray-400 hover:text-white hover:bg-gray-900 text-[11px] font-semibold transition-all cursor-pointer"
+                                title="Copier la réponse en texte"
+                              >
+                                <Copy className="h-3 w-3" />
+                                <span>Copier</span>
+                              </button>
+                            )}
 
                             {msg.imageUrl && (
                               <>
@@ -1360,12 +1381,12 @@ export default function App() {
                 </div>
               )}
 
-              <div className="flex items-end gap-2">
+              <div className="flex items-end gap-1.5 sm:gap-2">
                 {/* Paperclip button to attach image */}
                 <button
                   type="button"
                   onClick={triggerFileSelect}
-                  className="p-2.5 rounded-xl border border-gray-850 bg-gray-900/30 text-gray-400 hover:text-gray-200 hover:bg-gray-900 transition-all shrink-0 cursor-pointer"
+                  className="p-2 sm:p-2.5 rounded-xl border border-gray-850 bg-gray-900/30 text-gray-400 hover:text-gray-200 hover:bg-gray-900 transition-all shrink-0 cursor-pointer"
                   title="Ajouter une photo"
                 >
                   <Image className="h-4.5 w-4.5" />
@@ -1382,7 +1403,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setMode(mode === 'text' ? 'image' : 'text')}
-                  className={`p-2.5 rounded-xl border transition-all shrink-0 cursor-pointer ${
+                  className={`p-2 sm:p-2.5 rounded-xl border transition-all shrink-0 cursor-pointer ${
                     mode === 'image'
                       ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
                       : 'border-gray-850 bg-gray-900/30 text-gray-400 hover:text-gray-200 hover:bg-gray-900'
@@ -1416,7 +1437,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={toggleListening}
-                  className={`p-2.5 rounded-xl border transition-all shrink-0 cursor-pointer ${
+                  className={`p-2 sm:p-2.5 rounded-xl border transition-all shrink-0 cursor-pointer ${
                     isListening
                       ? 'bg-red-500/15 border-red-500/30 text-red-500 animate-pulse'
                       : 'border-gray-850 bg-gray-900/30 text-gray-400 hover:text-gray-200 hover:bg-gray-900'
@@ -1430,7 +1451,7 @@ export default function App() {
                 <button
                   type="submit"
                   disabled={(!input.trim() && !attachedImage) || isStreaming || isGeneratingImage}
-                  className={`p-2.5 rounded-xl transition-all cursor-pointer shrink-0 ${
+                  className={`p-2 sm:p-2.5 rounded-xl transition-all cursor-pointer shrink-0 ${
                     (!input.trim() && !attachedImage) || isStreaming || isGeneratingImage
                       ? 'bg-gray-900 text-gray-600 border border-gray-850/50 cursor-not-allowed'
                       : mode === 'image'
@@ -1444,12 +1465,12 @@ export default function App() {
               </div>
             </form>
 
-            <div className="flex items-center justify-between text-[11px] text-gray-500 px-1 font-sans select-none leading-none">
+            <div className="flex flex-col sm:flex-row items-center justify-between text-[11px] text-gray-500 gap-2 px-1 font-sans select-none leading-none text-center sm:text-left">
               <div className="flex items-center gap-1">
-                <Info className="h-3 w-3 text-gray-600" />
+                <Info className="h-3 w-3 text-gray-600 shrink-0" />
                 <span>Modèle par défaut : Gemini 3.5 & Imagen.</span>
               </div>
-              <div>
+              <div className="hidden sm:block">
                 <span>Presser Entrée pour envoyer, Maj+Entrée pour sauter une ligne.</span>
               </div>
             </div>

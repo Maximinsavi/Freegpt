@@ -22,8 +22,13 @@ const ai = new GoogleGenAI({
 // Middlewares
 app.use(express.json({ limit: '10mb' }));
 
+// Health Check Endpoint
+app.get(["/api", "/api/health"], (req, res) => {
+  res.json({ status: "ok", service: "FreeGPT Local Backend" });
+});
+
 // API: Chat Completion (SSE Streaming)
-app.post("/api/chat", async (req, res) => {
+app.post(["/api/chat", "/chat"], async (req, res) => {
   const { messages, systemInstruction, temperature } = req.body;
 
   res.setHeader("Content-Type", "text/event-stream");
@@ -88,7 +93,7 @@ app.post("/api/chat", async (req, res) => {
 });
 
 // API: Image Generation (Gemini-Enhanced Flux Engine)
-app.post("/api/generate-image", async (req, res) => {
+app.post(["/api/generate-image", "/generate-image"], async (req, res) => {
   const { prompt, aspectRatio } = req.body;
   
   if (!prompt) {
