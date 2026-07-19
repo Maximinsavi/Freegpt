@@ -49,7 +49,7 @@ export default function FormattedText({ content }: FormattedTextProps) {
   const blocks = parseContent(content);
 
   return (
-    <div className="space-y-4 text-[15px] leading-relaxed text-gray-200">
+    <div className="space-y-4 text-[15px] leading-relaxed text-gray-200 break-words [word-break:break-word] overflow-hidden">
       {blocks.map((block, idx) => {
         if (block.type === 'code') {
           return <CodeRenderer key={idx} language={block.language} code={block.code} />;

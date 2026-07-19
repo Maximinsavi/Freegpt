@@ -720,7 +720,7 @@ export default function App() {
   const activePersona = PERSONAS.find((p) => p.id === activeConv?.personaId) || PERSONAS[0];
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-gray-950 font-sans text-gray-100">
+    <div className="flex h-[100dvh] w-full max-w-full overflow-hidden bg-gray-950 font-sans text-gray-100">
       
       {/* Toast Notification */}
       <AnimatePresence>
@@ -949,12 +949,9 @@ export default function App() {
             <div className="flex items-center gap-2">
               <span className="text-lg">{activePersona.emoji}</span>
               <div>
-                <h2 className="font-display text-[14.5px] font-bold text-white tracking-wide">
+                <h2 className="font-display text-[14.5px] font-bold text-white tracking-wide whitespace-nowrap">
                   {activePersona.name}
                 </h2>
-                <p className="text-[10px] text-gray-400 font-mono tracking-tight leading-none uppercase">
-                  {activePersona.id === 'general' ? 'Modèle Texte & Image' : activePersona.description.slice(0, 40)}
-                </p>
               </div>
             </div>
           </div>
