@@ -610,50 +610,18 @@ export default function App() {
         }
 
         const reader = res.body.getReader();
-        const decoder = new TextDecoder();
+        const decoder = new TextDecoder("utf-8");
         let streamAccumulator = '';
         let buffer = '';
 
         while (true) {
           const { done, value } = await reader.read();
-          if (done) {
-            const trimmedLine = buffer.trim();
-            if (trimmedLine.startsWith('data: ')) {
-              const dataValue = trimmedLine.substring(6).trim();
-              if (dataValue && dataValue !== '[DONE]') {
-                try {
-                  const parsed = JSON.parse(dataValue);
-                  if (parsed.text) {
-                    streamAccumulator += parsed.text;
-                    setConversations((prev) =>
-                      prev.map((c) => {
-                        if (c.id === activeConv.id) {
-                          return {
-                            ...c,
-                            messages: c.messages.map((m) =>
-                              m.id === botMsgId
-                                ? {
-                                    ...m,
-                                    content: streamAccumulator,
-                                    isGenerating: false,
-                                  }
-                                : m
-                            ),
-                          };
-                        }
-                        return c;
-                      })
-                    );
-                  }
-                } catch (e) {}
-              }
-            }
-            break;
+          
+          if (value) {
+            buffer += decoder.decode(value, { stream: true });
           }
 
-          buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
-          // Keep the last item in buffer since it might be an incomplete line
           buffer = lines.pop() || '';
 
           for (const line of lines) {
@@ -665,8 +633,15 @@ export default function App() {
               if (dataValue === '[DONE]') {
                 break;
               }
+              
+              let parsed: any = null;
               try {
-                const parsed = JSON.parse(dataValue);
+                parsed = JSON.parse(dataValue);
+              } catch (e) {
+                // Ignore incomplete line parse failure
+              }
+
+              if (parsed) {
                 if (parsed.text) {
                   streamAccumulator += parsed.text;
                   setConversations((prev) =>
@@ -691,10 +666,51 @@ export default function App() {
                 } else if (parsed.error) {
                   throw new Error(parsed.error);
                 }
-              } catch (e) {
-                // Ignore incomplete line parse failure
               }
             }
+          }
+
+          if (done) {
+            const remainingLine = buffer.trim();
+            if (remainingLine.startsWith('data: ')) {
+              const dataValue = remainingLine.substring(6).trim();
+              if (dataValue && dataValue !== '[DONE]') {
+                let parsed: any = null;
+                try {
+                  parsed = JSON.parse(dataValue);
+                } catch (e) {
+                  // Ignore parse error
+                }
+
+                if (parsed) {
+                  if (parsed.text) {
+                    streamAccumulator += parsed.text;
+                    setConversations((prev) =>
+                      prev.map((c) => {
+                        if (c.id === activeConv.id) {
+                          return {
+                            ...c,
+                            messages: c.messages.map((m) =>
+                              m.id === botMsgId
+                                ? {
+                                    ...m,
+                                    content: streamAccumulator,
+                                    isGenerating: false,
+                                  }
+                                : m
+                            ),
+                          };
+                        }
+                        return c;
+                      })
+                    );
+                  } else if (parsed.error) {
+                    throw new Error(parsed.error);
+                  }
+                }
+              }
+            }
+            break;
           }
         }
       } catch (err: any) {

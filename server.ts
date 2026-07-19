@@ -31,10 +31,15 @@ app.get(["/api", "/api/health"], (req, res) => {
 app.post(["/api/chat", "/chat"], async (req, res) => {
   const { messages, systemInstruction, temperature } = req.body;
 
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no");
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no"
+  });
+  if (typeof res.flushHeaders === "function") {
+    res.flushHeaders();
+  }
 
   try {
     // Map history to roles supporting text and image modalities
