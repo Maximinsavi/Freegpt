@@ -9,15 +9,21 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-// Initialize GoogleGenAI with server-side API Key
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
+// Initialize GoogleGenAI with server-side API Key lazily to handle missing key errors gracefully
+function getGeminiClient() {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === "YOUR_GEMINI_API_KEY" || apiKey.trim() === "") {
+    throw new Error("Clé API Gemini manquante. Veuillez configurer votre clé API dans Google AI Studio via le menu Paramètres > Secrets (Settings > Secrets) pour activer les fonctionnalités d'IA.");
   }
-});
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      }
+    }
+  });
+}
 
 // Middlewares
 app.use(express.json({ limit: '10mb' }));
@@ -74,7 +80,8 @@ app.post(["/api/chat", "/chat"], async (req, res) => {
       };
     });
 
-    const responseStream = await ai.models.generateContentStream({
+    const aiClient = getGeminiClient();
+    const responseStream = await aiClient.models.generateContentStream({
       model: "gemini-3.5-flash",
       contents,
       config: {
@@ -126,7 +133,8 @@ app.post(["/api/generate-image", "/generate-image"], async (req, res) => {
   let enrichedPrompt = prompt;
   try {
     console.log(`Enriching/translating image prompt with Gemini: "${prompt}"`);
-    const enrichResponse = await ai.models.generateContent({
+    const aiClient = getGeminiClient();
+    const enrichResponse = await aiClient.models.generateContent({
       model: "gemini-3.5-flash",
       contents: `You are an expert AI image prompt engineer. 
 Translate the following prompt to English if it is in French, and enrich it by adding highly vivid visual details, descriptive artistic textures, beautiful volumetric cinematic lighting, photorealism elements, or matching artistic styles. 

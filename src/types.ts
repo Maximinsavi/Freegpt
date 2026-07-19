@@ -9,6 +9,7 @@ export interface Message {
   isGenerating?: boolean;
   error?: string;
   attachedImage?: string;
+  audioUrl?: string;
 }
 
 export interface Conversation {

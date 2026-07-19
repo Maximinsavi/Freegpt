@@ -29,6 +29,27 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Message, Conversation, Persona } from './types';
 import { PERSONAS } from './data/personas';
 import FormattedText from './components/FormattedText';
+import VoicePlayer from './components/VoicePlayer';
+
+function TranscriptToggle({ content }: { content: string }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="mt-1 select-none">
+      <button
+        type="button"
+        onClick={() => setShow(!show)}
+        className="text-[10px] text-white/70 hover:text-white underline font-semibold transition-colors cursor-pointer"
+      >
+        {show ? "Masquer la transcription" : "Afficher la transcription"}
+      </button>
+      {show && (
+        <div className="mt-2 text-xs text-white/90 bg-white/5 border border-white/5 rounded-xl p-2.5 leading-relaxed font-sans break-words max-w-[280px]">
+          {content}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function App() {
   // --- Persistent Local States ---
@@ -85,15 +106,25 @@ export default function App() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   // Sync to local storage
   useEffect(() => {
-    localStorage.setItem('freegpt_conversations', JSON.stringify(conversations));
+    try {
+      localStorage.setItem('freegpt_conversations', JSON.stringify(conversations));
+    } catch (e) {
+      console.warn("Failed to write to localStorage (quota likely exceeded due to base64 images/audios):", e);
+    }
   }, [conversations]);
 
   useEffect(() => {
     if (activeConversationId) {
-      localStorage.setItem('freegpt_active_id', activeConversationId);
+      try {
+        localStorage.setItem('freegpt_active_id', activeConversationId);
+      } catch (e) {
+        console.warn("Failed to write active ID to localStorage:", e);
+      }
     }
   }, [activeConversationId]);
 
@@ -123,8 +154,62 @@ export default function App() {
     }
   }, [input]);
 
-  // Speech Recognition (Vocal Dictation - Sent directly to Chat)
+  // Speech Recognition & MediaRecorder (Vocal Dictation + Audio Recording)
   const handleSendMessageRef = useRef<any>(null);
+
+  const startRecordingAudio = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.start();
+    } catch (err) {
+      console.warn("Failed to start MediaRecorder recording:", err);
+    }
+  };
+
+  const stopRecordingAudio = (): Promise<string | null> => {
+    return new Promise((resolve) => {
+      if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
+        resolve(null);
+        return;
+      }
+
+      mediaRecorderRef.current.onstop = async () => {
+        try {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          // Stop all tracks to release the mic
+          const stream = mediaRecorderRef.current?.stream;
+          stream?.getTracks().forEach((track) => track.stop());
+
+          const base64Url = await blobToBase64(audioBlob);
+          resolve(base64Url);
+        } catch (err) {
+          console.error("Failed to process audio blob to base64:", err);
+          resolve(null);
+        }
+      };
+
+      mediaRecorderRef.current.stop();
+    });
+  };
+
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
 
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -137,14 +222,16 @@ export default function App() {
       rec.onstart = () => {
         setIsListening(true);
         showToast("Enregistrement en cours... Parlez maintenant.");
+        startRecordingAudio();
       };
 
-      rec.onresult = (event: any) => {
+      rec.onresult = async (event: any) => {
         const transcript = event.results[0][0].transcript;
         if (transcript && transcript.trim()) {
           showToast("Message vocal capturé ! Envoi...");
+          const audioUrl = await stopRecordingAudio();
           if (handleSendMessageRef.current) {
-            handleSendMessageRef.current(transcript.trim());
+            handleSendMessageRef.current(transcript.trim(), 'text', audioUrl);
           }
         }
       };
@@ -152,6 +239,15 @@ export default function App() {
       rec.onerror = (event: any) => {
         console.error('Speech recognition error', event.error);
         setIsListening(false);
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          try {
+            mediaRecorderRef.current.stop();
+            const stream = mediaRecorderRef.current.stream;
+            stream?.getTracks().forEach((track) => track.stop());
+          } catch (e) {
+            console.error(e);
+          }
+        }
         showToast("Erreur d'écoute ou micro non disponible.");
       };
 
@@ -430,7 +526,7 @@ export default function App() {
   };
 
   // --- Sending Message Engine ---
-  const handleSendMessage = async (forcedPrompt?: string, forceMode?: 'text' | 'image') => {
+  const handleSendMessage = async (forcedPrompt?: string, forceMode?: 'text' | 'image', forcedAudioUrl?: string) => {
     const textToSend = forcedPrompt !== undefined ? forcedPrompt : input.trim();
     if (!textToSend && !attachedImage) return;
 
@@ -458,6 +554,7 @@ export default function App() {
       timestamp,
       type: currentMode,
       attachedImage: currentAttachment || undefined,
+      audioUrl: forcedAudioUrl || undefined,
     };
 
     const isFirstMessage = activeConv.messages.length === 0;
@@ -1223,11 +1320,18 @@ export default function App() {
                               </div>
                             ) : null}
 
-                            {/* Render Text Body formatted as Markdown */}
-                            {msg.content && (
-                              <div className={isUser ? 'text-white' : 'text-slate-800'}>
-                                <FormattedText content={msg.content} />
+                            {/* Render Text Body formatted as Markdown or Voice Player */}
+                            {msg.audioUrl ? (
+                              <div className="space-y-2">
+                                <VoicePlayer audioUrl={msg.audioUrl} />
+                                <TranscriptToggle content={msg.content} />
                               </div>
+                            ) : (
+                              msg.content && (
+                                <div className={isUser ? 'text-white' : 'text-slate-800'}>
+                                  <FormattedText content={msg.content} />
+                                </div>
+                              )
                             )}
                           </div>
                         )}
@@ -1425,8 +1529,11 @@ export default function App() {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
+                      const isMobile = window.matchMedia("(max-width: 768px)").matches || /Mobi|Android|iPhone/i.test(navigator.userAgent);
+                      if (!isMobile) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
                     }
                   }}
                   rows={1}
