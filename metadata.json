@@ -1,0 +1,6 @@
+{
+  "name": "FreeGPT",
+  "description": "Un chatbot puissant inspiré de ChatGPT doté de capacités de génération de texte contextuel en temps réel et de génération d'images illimitée.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
