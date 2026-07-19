@@ -49,7 +49,7 @@ export default function FormattedText({ content }: FormattedTextProps) {
   const blocks = parseContent(content);
 
   return (
-    <div className="space-y-4 text-[15px] leading-relaxed text-gray-200 break-words [word-break:break-word] overflow-hidden">
+    <div className="space-y-4 text-[15px] leading-relaxed text-slate-800 break-words [word-break:break-word] overflow-hidden">
       {blocks.map((block, idx) => {
         if (block.type === 'code') {
           return <CodeRenderer key={idx} language={block.language} code={block.code} />;
@@ -80,15 +80,15 @@ function CodeRenderer({ language, code }: CodeRendererProps) {
   };
 
   return (
-    <div className="my-3 overflow-hidden rounded-xl border border-gray-800 bg-gray-950 font-mono text-xs sm:text-sm shadow-lg w-full max-w-full">
-      <div className="flex items-center justify-between border-b border-gray-900 bg-gray-900/80 px-4 py-2 text-xs text-gray-400 select-none">
+    <div className="my-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-900 font-mono text-xs sm:text-sm shadow-sm w-full max-w-full">
+      <div className="flex items-center justify-between border-b border-slate-800 bg-slate-950/80 px-4 py-2 text-xs text-slate-400 select-none">
         <div className="flex items-center gap-2">
           <Terminal className="h-3.5 w-3.5 text-emerald-400" />
-          <span className="font-semibold uppercase tracking-wider text-gray-300">{language}</span>
+          <span className="font-semibold uppercase tracking-wider text-[10px]">{language}</span>
         </div>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white cursor-pointer"
+          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white cursor-pointer"
           title="Copier le code"
         >
           {copied ? (
@@ -105,7 +105,7 @@ function CodeRenderer({ language, code }: CodeRendererProps) {
         </button>
       </div>
       <div className="overflow-x-auto p-3 sm:p-4 w-full max-w-full [webkit-overflow-scrolling:touch]">
-        <pre className="text-gray-100 selection:bg-emerald-500/30 whitespace-pre overflow-x-auto max-w-full">
+        <pre className="text-slate-100 selection:bg-emerald-500/30 whitespace-pre overflow-x-auto max-w-full">
           <code className="block max-w-full">{code}</code>
         </pre>
       </div>
@@ -119,7 +119,6 @@ interface TextRendererProps {
 }
 
 function TextRenderer({ text }: TextRendererProps) {
-  // Split block by lines to parse structures
   const lines = text.split('\n');
   const renderedElements: React.ReactNode[] = [];
   
@@ -130,13 +129,13 @@ function TextRenderer({ text }: TextRendererProps) {
     if (currentListItems.length > 0) {
       if (currentListType === 'bullet') {
         renderedElements.push(
-          <ul key={`ul-${key}`} className="my-3 list-disc pl-6 space-y-1.5 text-gray-300">
+          <ul key={`ul-${key}`} className="my-3 list-disc pl-6 space-y-1.5 text-slate-700">
             {...currentListItems}
           </ul>
         );
       } else if (currentListType === 'ordered') {
         renderedElements.push(
-          <ol key={`ol-${key}`} className="my-3 list-decimal pl-6 space-y-1.5 text-gray-300">
+          <ol key={`ol-${key}`} className="my-3 list-decimal pl-6 space-y-1.5 text-slate-700">
             {...currentListItems}
           </ol>
         );
@@ -191,26 +190,26 @@ function TextRenderer({ text }: TextRendererProps) {
     // Headers check
     if (line.startsWith('### ')) {
       renderedElements.push(
-        <h3 key={`h3-${key}`} className="mt-4 mb-2 font-display text-base font-bold text-white tracking-wide">
+        <h3 key={`h3-${key}`} className="mt-4 mb-2 font-display text-base font-bold text-slate-900 tracking-wide">
           {renderTextInline(line.substring(4))}
         </h3>
       );
     } else if (line.startsWith('## ')) {
       renderedElements.push(
-        <h2 key={`h2-${key}`} className="mt-5 mb-2.5 font-display text-lg font-bold text-white tracking-wide border-b border-gray-800/50 pb-1">
+        <h2 key={`h2-${key}`} className="mt-5 mb-2.5 font-display text-lg font-bold text-slate-900 tracking-wide border-b border-slate-100 pb-1">
           {renderTextInline(line.substring(3))}
         </h2>
       );
     } else if (line.startsWith('# ')) {
       renderedElements.push(
-        <h1 key={`h1-${key}`} className="mt-6 mb-3 font-display text-xl font-bold text-white tracking-wide border-b border-gray-800 pb-1.5">
+        <h1 key={`h1-${key}`} className="mt-6 mb-3 font-display text-xl font-bold text-slate-900 tracking-wide border-b border-slate-200 pb-1.5">
           {renderTextInline(line.substring(2))}
         </h1>
       );
     } else {
       // Standard paragraph
       renderedElements.push(
-        <p key={`p-${key}`} className="my-2 text-gray-300 leading-relaxed break-words">
+        <p key={`p-${key}`} className="my-2 text-slate-700 leading-relaxed break-words">
           {renderTextInline(line)}
         </p>
       );
@@ -237,21 +236,21 @@ function renderTextInline(text: string): React.ReactNode[] {
     const key = `${idx}-${keyCounter++}`;
     if (part.startsWith('`') && part.endsWith('`')) {
       return (
-        <code key={key} className="mx-1 rounded bg-gray-850 px-1.5 py-0.5 font-mono text-xs text-emerald-400 border border-gray-800">
+        <code key={key} className="mx-0.5 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] text-rose-600 border border-slate-200">
           {part.slice(1, -1)}
         </code>
       );
     }
     if (part.startsWith('**') && part.endsWith('**')) {
       return (
-        <strong key={key} className="font-semibold text-white">
+        <strong key={key} className="font-semibold text-slate-950">
           {part.slice(2, -2)}
         </strong>
       );
     }
     if (part.startsWith('*') && part.endsWith('*')) {
       return (
-        <em key={key} className="italic text-gray-300">
+        <em key={key} className="italic text-slate-600">
           {part.slice(1, -1)}
         </em>
       );
