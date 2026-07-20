@@ -24,13 +24,45 @@ function getGeminiClient() {
   });
 }
 
+// Helper to fetch from the Gemma Vercel API with robust response formatting
+async function fetchGemmaResponse(uid: string, prompt: string): Promise<string> {
+  const url = `https://rest-api-orcin-kappa.vercel.app/api/gemma?uid=${encodeURIComponent(uid)}&prompt=${encodeURIComponent(prompt)}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Gemma API a retourné le statut ${res.status}`);
+  }
+  const text = await res.text();
+  try {
+    const json = JSON.parse(text);
+    if (json && typeof json === 'object') {
+      const possibleKeys = ['response', 'text', 'result', 'gemma', 'message', 'content', 'reply', 'output'];
+      for (const key of possibleKeys) {
+        if (json[key] && typeof json[key] === 'string') {
+          return json[key];
+        }
+      }
+      if (json.message && typeof json.message === 'object' && typeof json.message.content === 'string') {
+        return json.message.content;
+      }
+      if (json.choices && Array.isArray(json.choices) && json.choices[0]) {
+        const choice = json.choices[0];
+        if (choice.text && typeof choice.text === 'string') return choice.text;
+        if (choice.message && typeof choice.message.content === 'string') return choice.message.content;
+      }
+    }
+  } catch (e) {
+    // Not JSON, return raw text
+  }
+  return text;
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { messages, systemInstruction, temperature } = req.body;
+  const { messages, uid, systemInstruction, temperature } = req.body;
 
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
@@ -43,50 +75,17 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const contents = messages.map((m: any) => {
-      const parts: any[] = [];
-      
-      if (m.content) {
-        parts.push({ text: m.content });
-      }
-
-      if (m.attachedImage) {
-        const matches = m.attachedImage.match(/^data:([^;]+);base64,(.+)$/);
-        if (matches && matches.length === 3) {
-          parts.push({
-            inlineData: {
-              data: matches[2],
-              mimeType: matches[1]
-            }
-          });
-        }
-      }
-
-      if (parts.length === 0) {
-        parts.push({ text: "" });
-      }
-
-      return {
-        role: m.role === "user" ? "user" : "model",
-        parts
-      };
-    });
-
-    const aiClient = getGeminiClient();
-    const responseStream = await aiClient.models.generateContentStream({
-      model: "gemini-3.5-flash",
-      contents,
-      config: {
-        systemInstruction: systemInstruction || "You are a helpful AI assistant called FreeGPT.",
-        temperature: temperature !== undefined ? Number(temperature) : 0.7,
-      }
-    });
-
-    for await (const chunk of responseStream) {
-      if (chunk.text) {
-        res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+    const conversationUid = uid || "default-session";
+    let prompt = "Bonjour";
+    if (messages && messages.length > 0) {
+      const lastUserMessage = [...messages].reverse().find((m: any) => m.role === "user");
+      if (lastUserMessage && lastUserMessage.content) {
+        prompt = lastUserMessage.content;
       }
     }
+
+    const textGemma = await fetchGemmaResponse(conversationUid, prompt);
+    res.write(`data: ${JSON.stringify({ text: textGemma })}\n\n`);
     res.write("data: [DONE]\n\n");
     res.end();
   } catch (err: any) {

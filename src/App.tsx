@@ -23,7 +23,10 @@ import {
   RefreshCw,
   ExternalLink,
   Copy,
-  Mic
+  Mic,
+  Phone,
+  PhoneOff,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Message, Conversation, Persona } from './types';
@@ -102,6 +105,17 @@ export default function App() {
   const [isToastVisible, setIsToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
+  // --- Voice Call States ---
+  const [isVoiceCallOpen, setIsVoiceCallOpen] = useState(false);
+  const [voiceCallStatus, setVoiceCallStatus] = useState<'connecting' | 'connected' | 'listening' | 'processing' | 'speaking' | 'disconnected'>('disconnected');
+  const [voiceCallUserText, setVoiceCallUserText] = useState('');
+  const [voiceCallAiText, setVoiceCallAiText] = useState('');
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoiceName, setSelectedVoiceName] = useState<string>(() => {
+    return localStorage.getItem('freegpt_selected_voice') || '';
+  });
+  const voiceCallRecognitionRef = useRef<any>(null);
+
   // --- Refs ---
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -109,6 +123,7 @@ export default function App() {
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const lastTranscriptRef = useRef<string>('');
 
   // Sync to local storage
   useEffect(() => {
@@ -222,18 +237,15 @@ export default function App() {
 
       rec.onstart = () => {
         setIsListening(true);
+        lastTranscriptRef.current = '';
         showToast("Enregistrement en cours... Parlez maintenant.");
         startRecordingAudio();
       };
 
-      rec.onresult = async (event: any) => {
+      rec.onresult = (event: any) => {
         const transcript = event.results[0][0].transcript;
         if (transcript && transcript.trim()) {
-          showToast("Message vocal capturé ! Envoi...");
-          const audioUrl = await stopRecordingAudio();
-          if (handleSendMessageRef.current) {
-            handleSendMessageRef.current(transcript.trim(), 'text', audioUrl);
-          }
+          lastTranscriptRef.current = transcript.trim();
         }
       };
 
@@ -252,8 +264,18 @@ export default function App() {
         showToast("Erreur d'écoute ou micro non disponible.");
       };
 
-      rec.onend = () => {
+      rec.onend = async () => {
         setIsListening(false);
+        const audioUrl = await stopRecordingAudio();
+        const finalTranscript = lastTranscriptRef.current;
+        lastTranscriptRef.current = ''; // Reset
+
+        if (finalTranscript) {
+          showToast("Message vocal envoyé ! 🎙️");
+          if (handleSendMessageRef.current) {
+            handleSendMessageRef.current(finalTranscript, 'text', audioUrl);
+          }
+        }
       };
 
       recognitionRef.current = rec;
@@ -692,6 +714,7 @@ export default function App() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            uid: activeConv.id,
             messages: textHistory,
             systemInstruction,
             temperature: activeConv.temperature,
@@ -841,6 +864,209 @@ export default function App() {
 
   handleSendMessageRef.current = handleSendMessage;
 
+  // --- Voice Synthesis & Voice Call Handlers ---
+  useEffect(() => {
+    const updateVoices = () => {
+      const allVoices = window.speechSynthesis.getVoices();
+      // Filter for French and English
+      const filtered = allVoices.filter(v => v.lang.startsWith('fr') || v.lang.startsWith('en'));
+      const finalVoices = filtered.length > 0 ? filtered : allVoices;
+      setVoices(finalVoices);
+      
+      // Default to a French voice if available, otherwise first voice
+      if (!selectedVoiceName || !finalVoices.some(v => v.name === selectedVoiceName)) {
+        const defaultVoice = finalVoices.find(v => v.lang.startsWith('fr')) || finalVoices[0];
+        if (defaultVoice) {
+          setSelectedVoiceName(defaultVoice.name);
+          localStorage.setItem('freegpt_selected_voice', defaultVoice.name);
+        }
+      }
+    };
+
+    updateVoices();
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = updateVoices;
+    }
+  }, [selectedVoiceName]);
+
+  const startVoiceCallListening = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      showToast("La reconnaissance vocale n'est pas disponible sur votre navigateur.");
+      return;
+    }
+
+    if (voiceCallRecognitionRef.current) {
+      try { voiceCallRecognitionRef.current.stop(); } catch (e) {}
+    }
+
+    const rec = new SpeechRecognition();
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.lang = 'fr-FR';
+
+    rec.onstart = () => {
+      setVoiceCallStatus('listening');
+    };
+
+    rec.onresult = async (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      if (transcript && transcript.trim()) {
+        setVoiceCallUserText(transcript.trim());
+        processVoiceCallUserUtterance(transcript.trim());
+      }
+    };
+
+    rec.onerror = (event: any) => {
+      console.error('Voice call speech recognition error', event.error);
+      if (event.error !== 'no-speech') {
+        showToast("Erreur de micro. Veuillez réessayer.");
+        setVoiceCallStatus('connected');
+      } else {
+        setVoiceCallStatus('connected');
+      }
+    };
+
+    rec.onend = () => {
+      setVoiceCallStatus((prev) => (prev === 'listening' ? 'connected' : prev));
+    };
+
+    voiceCallRecognitionRef.current = rec;
+    try {
+      rec.start();
+    } catch (e) {
+      console.error("Failed to start voice call recognition:", e);
+    }
+  };
+
+  const processVoiceCallUserUtterance = async (userText: string) => {
+    setVoiceCallStatus('processing');
+    setVoiceCallAiText("Réflexion de l'IA...");
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uid: activeConv.id + "_call",
+          messages: [{ role: 'user', content: userText }],
+          systemInstruction: "You are a friendly, concise voice assistant. Give super-short responses of max 1 or 2 sentences in French. Respond conversationally, as this is a real-time phone call.",
+        }),
+      });
+
+      if (!res.ok) throw new Error("Gemma API error");
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let text = '';
+      if (reader) {
+        let buffer = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (value) {
+            buffer += decoder.decode(value, { stream: true });
+          }
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('data: ')) {
+              const dataValue = trimmed.substring(6).trim();
+              if (dataValue === '[DONE]') break;
+              try {
+                const parsed = JSON.parse(dataValue);
+                if (parsed.text) {
+                  text += parsed.text;
+                }
+              } catch (e) {}
+            }
+          }
+          if (done) break;
+        }
+      }
+
+      if (!text) {
+        text = "Je n'ai pas d'explication pour cela.";
+      }
+
+      setVoiceCallAiText(text);
+      setVoiceCallStatus('speaking');
+
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(
+        text.replace(/```[\s\S]*?```/g, '').replace(/\*\*|\*/g, '')
+      );
+      
+      const selectedVoice = voices.find(v => v.name === selectedVoiceName);
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+        utterance.lang = selectedVoice.lang;
+      } else {
+        utterance.lang = 'fr-FR';
+      }
+
+      utterance.onend = () => {
+        setVoiceCallStatus('connected');
+        // Auto listening if voice call is still open
+        setTimeout(() => {
+          if (window.speechSynthesis.speaking) return; // Prevent loop overlapping
+          startVoiceCallListening();
+        }, 800);
+      };
+
+      utterance.onerror = () => {
+        setVoiceCallStatus('connected');
+      };
+
+      window.speechSynthesis.speak(utterance);
+
+    } catch (err) {
+      console.error("Voice call processing failed:", err);
+      setVoiceCallAiText("Désolé, j'ai rencontré un problème de réseau.");
+      setVoiceCallStatus('connected');
+    }
+  };
+
+  const handleStartVoiceCall = () => {
+    setIsVoiceCallOpen(true);
+    setVoiceCallStatus('connecting');
+    setVoiceCallUserText("Préparez-vous à parler...");
+    setVoiceCallAiText("Bonjour ! Comment puis-je vous aider ?");
+    
+    // Play greeting
+    setTimeout(() => {
+      setVoiceCallStatus('speaking');
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance("Bonjour ! Je suis prêt pour notre appel vocal. Comment puis-je vous aider ?");
+      const selectedVoice = voices.find(v => v.name === selectedVoiceName);
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+        utterance.lang = selectedVoice.lang;
+      } else {
+        utterance.lang = 'fr-FR';
+      }
+      utterance.onend = () => {
+        setVoiceCallStatus('connected');
+        setTimeout(() => {
+          startVoiceCallListening();
+        }, 500);
+      };
+      utterance.onerror = () => {
+        setVoiceCallStatus('connected');
+      };
+      window.speechSynthesis.speak(utterance);
+    }, 1000);
+  };
+
+  const handleEndVoiceCall = () => {
+    setVoiceCallStatus('disconnected');
+    setIsVoiceCallOpen(false);
+    if (voiceCallRecognitionRef.current) {
+      try { voiceCallRecognitionRef.current.stop(); } catch (e) {}
+    }
+    window.speechSynthesis.cancel();
+  };
+
   const activePersona = PERSONAS.find((p) => p.id === activeConv?.personaId) || PERSONAS[0];
 
   return (
@@ -941,6 +1167,159 @@ export default function App() {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Voice Call Modal (Fullscreen Overlay) */}
+      <AnimatePresence>
+        {isVoiceCallOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-55 flex flex-col items-center justify-between bg-slate-950/98 p-6 text-white font-sans"
+          >
+            {/* Call Header */}
+            <div className="w-full max-w-lg flex items-center justify-between mt-4">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                </span>
+                <span className="text-xs sm:text-sm font-bold tracking-wide uppercase text-slate-300">
+                  {voiceCallStatus === 'connecting' ? 'Connexion...' : 
+                   voiceCallStatus === 'listening' ? 'À vous de parler...' :
+                   voiceCallStatus === 'processing' ? "L'IA réfléchit..." :
+                   voiceCallStatus === 'speaking' ? "L'IA vous parle..." : 'Appel vocal actif'}
+                </span>
+              </div>
+              
+              {/* Voice Choice Dropdown */}
+              <div className="relative shrink-0 max-w-xs">
+                <select
+                  value={selectedVoiceName}
+                  onChange={(e) => {
+                    setSelectedVoiceName(e.target.value);
+                    localStorage.setItem('freegpt_selected_voice', e.target.value);
+                  }}
+                  className="rounded-lg bg-slate-900/85 border border-slate-800 text-[11px] font-bold text-slate-300 px-2.5 py-1.5 focus:outline-none focus:border-emerald-500 max-w-[160px] sm:max-w-[200px] cursor-pointer"
+                >
+                  {voices.map((v) => (
+                    <option key={v.name} value={v.name} className="bg-slate-900 text-slate-100">
+                      {v.name} ({v.lang})
+                    </option>
+                  ))}
+                  {voices.length === 0 && (
+                    <option value="" className="bg-slate-900 text-slate-100">Voix Système Par Défaut</option>
+                  )}
+                </select>
+              </div>
+            </div>
+
+            {/* Central Visualizer Area */}
+            <div className="flex-1 flex flex-col items-center justify-center space-y-8 my-6">
+              {/* Glowing Pulse Orb */}
+              <div className="relative flex items-center justify-center">
+                <motion.div
+                  animate={{
+                    scale: voiceCallStatus === 'listening' ? [1, 1.2, 1] : 
+                           voiceCallStatus === 'speaking' ? [1, 1.15, 1.05, 1.2, 1] : [1, 1.05, 1],
+                  }}
+                  transition={{
+                    duration: voiceCallStatus === 'listening' ? 1.5 : 2.5,
+                    repeat: Infinity,
+                    ease: "easeInOut"
+                  }}
+                  className={`h-28 w-28 sm:h-36 sm:w-36 rounded-full flex items-center justify-center transition-colors duration-500 shadow-2xl relative z-10 ${
+                    voiceCallStatus === 'listening' ? 'bg-red-500/25 border border-red-400/40 text-red-100 shadow-red-500/20' :
+                    voiceCallStatus === 'processing' ? 'bg-indigo-500/25 border border-indigo-400/40 text-indigo-100 shadow-indigo-500/20' :
+                    voiceCallStatus === 'speaking' ? 'bg-emerald-500/25 border border-emerald-400/40 text-emerald-100 shadow-emerald-500/20' :
+                    'bg-slate-800/40 border border-slate-700 text-slate-300 shadow-slate-900/50'
+                  }`}
+                >
+                  {voiceCallStatus === 'processing' ? (
+                    <Loader2 className="h-10 w-10 animate-spin text-indigo-400" />
+                  ) : voiceCallStatus === 'listening' ? (
+                    <Mic className="h-10 w-10 text-red-400 animate-pulse" />
+                  ) : (
+                    <Bot className="h-10 w-10 text-emerald-400" />
+                  )}
+                </motion.div>
+
+                {/* Animated Ripple Circles */}
+                {voiceCallStatus !== 'connecting' && voiceCallStatus !== 'disconnected' && (
+                  <>
+                    <div className={`absolute inset-0 h-28 w-28 sm:h-36 sm:w-36 rounded-full animate-ping opacity-15 duration-1000 ${
+                      voiceCallStatus === 'listening' ? 'bg-red-500' :
+                      voiceCallStatus === 'processing' ? 'bg-indigo-500' : 'bg-emerald-500'
+                    }`} />
+                    <div className={`absolute inset-0 h-28 w-28 sm:h-36 sm:w-36 rounded-full animate-pulse opacity-10 duration-700 ${
+                      voiceCallStatus === 'listening' ? 'bg-red-400' :
+                      voiceCallStatus === 'processing' ? 'bg-indigo-400' : 'bg-emerald-400'
+                    }`} />
+                  </>
+                )}
+              </div>
+
+              {/* Subtitles / Conversation Dialogue */}
+              <div className="w-full max-w-md px-4 text-center space-y-4">
+                <div className="space-y-1">
+                  <div className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-widest">Vous</div>
+                  <p className="text-xs sm:text-sm text-slate-300 italic font-medium line-clamp-2 min-h-[20px]">
+                    "{voiceCallUserText || 'S\'exprimer...'}"
+                  </p>
+                </div>
+                
+                <div className="space-y-1">
+                  <div className="text-[10px] sm:text-xs font-bold text-emerald-500 uppercase tracking-widest">FreeGPT</div>
+                  <p className="text-sm sm:text-base text-white font-bold leading-relaxed tracking-wide [word-break:break-word] line-clamp-3 min-h-[24px]">
+                    {voiceCallAiText || 'En attente...'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Call Controls Bar */}
+            <div className="w-full max-w-md flex flex-col items-center gap-4 mb-6">
+              {/* Tips */}
+              <div className="text-[10px] text-slate-400/80 font-mono text-center">
+                {voiceCallStatus === 'listening' ? 'Parlez directement, l\'IA s\'adaptera en continu !' :
+                 voiceCallStatus === 'speaking' ? 'L\'IA s\'exprime. Écoutez bien...' :
+                 voiceCallStatus === 'processing' ? 'Analyse de votre requête...' : 'L\'appel est actif'}
+              </div>
+
+              <div className="flex items-center gap-6">
+                {/* Manual Talk / Mic Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (voiceCallStatus === 'connected') {
+                      startVoiceCallListening();
+                    }
+                  }}
+                  disabled={voiceCallStatus === 'listening' || voiceCallStatus === 'processing' || voiceCallStatus === 'speaking'}
+                  className={`h-12 w-12 rounded-full flex items-center justify-center border transition-all cursor-pointer ${
+                    voiceCallStatus === 'listening' ? 'bg-red-500/40 border-red-400 text-red-200 cursor-not-allowed' :
+                    voiceCallStatus === 'connected' ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300' :
+                    'bg-slate-950 border-slate-900 text-slate-600 cursor-not-allowed'
+                  }`}
+                  title="Parler à l'IA"
+                >
+                  <Mic className="h-5 w-5" />
+                </button>
+
+                {/* Hang Up Button */}
+                <button
+                  type="button"
+                  onClick={handleEndVoiceCall}
+                  className="h-16 w-16 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center text-white shadow-xl shadow-red-600/20 hover:scale-105 active:scale-95 transition-all cursor-pointer border border-red-500/25"
+                  title="Raccrocher et quitter"
+                >
+                  <PhoneOff className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -1235,6 +1614,15 @@ export default function App() {
                 <span>Exporter</span>
               </button>
             )}
+
+            {/* Voice Call button */}
+            <button
+              onClick={handleStartVoiceCall}
+              className="flex items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 p-2 text-emerald-600 hover:text-emerald-700 transition-all cursor-pointer shadow-xs"
+              title="Démarrer un appel vocal"
+            >
+              <Phone className="h-4 w-4" />
+            </button>
 
             {/* Settings button */}
             <button
